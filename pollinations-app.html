@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Simple Image Generator — Pollinations.ai</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --card: #1a1d24;
+      --border: #2a2f3a;
+      --text: #e8eaed;
+      --muted: #9aa0a6;
+      --accent: #7c6af7;
+      --accent-hover: #6958e0;
+      --ok: #4ade80;
+      --err: #f87171;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px 16px;
+      line-height: 1.45;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; }
+    h1 { font-size: 1.5rem; font-weight: 650; margin-bottom: 4px; }
+    .sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 24px; }
+    .sub a { color: var(--accent); }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    input, select, textarea, button {
+      font: inherit;
+      color: var(--text);
+    }
+    input, select, textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 14px;
+    }
+    textarea { min-height: 90px; resize: vertical; }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 520px) { .row { grid-template-columns: 1fr; } }
+    button {
+      width: 100%;
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      padding: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:hover:not(:disabled) { background: var(--accent-hover); }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover:not(:disabled) { background: var(--border); }
+    .btn-sm {
+      width: auto;
+      padding: 8px 14px;
+      font-size: 0.9rem;
+    }
+    .auth-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .auth-info { font-size: 0.9rem; color: var(--muted); }
+    .auth-info strong { color: var(--ok); font-weight: 600; }
+    .preview {
+      min-height: 280px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .preview img {
+      max-width: 100%;
+      max-height: 70vh;
+      display: block;
+    }
+    .preview .placeholder {
+      color: var(--muted);
+      font-size: 0.9rem;
+      text-align: center;
+      padding: 24px;
+    }
+    .actions { display: flex; gap: 10px; margin-top: 12px; }
+    .actions button { flex: 1; }
+    .status { font-size: 0.85rem; color: var(--muted); margin-top: 10px; min-height: 1.2em; }
+    .status.error { color: var(--err); }
+    .hint { font-size: 0.75rem; color: var(--muted); margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Simple Image Generator</h1>
+    <p class="sub">
+      Powered by <a href="https://pollinations.ai" target="_blank" rel="noopener">Pollinations.ai</a>
+      · Users sign in and spend their own Pollen (BYOP)
+    </p>
+
+    <!-- Auth -->
+    <div class="card">
+      <div id="loggedOut">
+        <p class="auth-info" style="margin-bottom:12px;">
+          Sign in with Pollinations to generate images. Usage is billed to your account.
+        </p>
+        <button id="loginBtn" type="button">Sign in with Pollinations</button>
+        <p class="hint">
+          No API key to paste. You’ll authorize this app and can revoke access anytime at
+          <a href="https://enter.pollinations.ai" target="_blank" rel="noopener" style="color:var(--accent)">enter.pollinations.ai</a>.
+        </p>
+      </div>
+      <div id="loggedIn" style="display:none;">
+        <div class="auth-row">
+          <p class="auth-info"><strong>Connected</strong> · key active in this session</p>
+          <button class="btn-secondary btn-sm" id="logoutBtn" type="button">Sign out</button>
+        </div>
+      </div>
+      <p class="status" id="authStatus"></p>
+    </div>
+
+    <!-- Generator -->
+    <div class="card">
+      <label for="prompt">Prompt</label>
+      <textarea id="prompt" placeholder="A cozy cabin in the snowy mountains at dusk, cinematic lighting">A red fox sitting in a mossy forest, soft morning light, highly detailed</textarea>
+
+      <div class="row">
+        <div>
+          <label for="model">Model</label>
+          <select id="model">
+            <option value="lykon/dreamshaper-8-lcm">DreamShaper 8 LCM (Cheap)</option>
+            <option value="tongyi-mai/z-image-turbo" selected>Z-Image Turbo (Balance)</option>
+            <option value="microsoft/mai-image-2.6-flash">MAI Image 2.6 Flash (Quality)</option>
+          </select>
+        </div>
+        <div>
+          <label for="size">Size</label>
+          <select id="size">
+            <option value="1024x1024" selected>1024 × 1024</option>
+            <option value="1280x720">1280 × 720</option>
+            <option value="720x1280">720 × 1280</option>
+            <option value="768x768">768 × 768</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="seed">Seed (empty = random)</label>
+          <input id="seed" type="number" placeholder="random" />
+        </div>
+        <div style="display:flex;align-items:flex-end;padding-bottom:14px;">
+          <label style="display:flex;align-items:center;gap:8px;margin:0;cursor:pointer;">
+            <input type="checkbox" id="nologo" checked style="width:auto;margin:0;" />
+            No logo
+          </label>
+        </div>
+      </div>
+
+      <button id="generateBtn" type="button" disabled>Generate</button>
+      <p class="status" id="status"></p>
+    </div>
+
+    <div class="card">
+      <div class="preview" id="preview">
+        <div class="placeholder">Sign in, then generate an image</div>
+      </div>
+      <div class="actions">
+        <button class="btn-secondary" id="downloadBtn" type="button" disabled>Download</button>
+        <button class="btn-secondary" id="openBtn" type="button" disabled>Open full size</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ——— твой App Key (pk_...) — публичный, можно оставлять в коде ———
+    const APP_KEY = 'pk_99f4K8R4D0IzFD2R';
+
+    const TOKEN_KEY = 'polli_byop_token';
+    const $ = (id) => document.getElementById(id);
+
+    const promptEl = $('prompt');
+    const modelEl = $('model');
+    const sizeEl = $('size');
+    const seedEl = $('seed');
+    const nologoEl = $('nologo');
+    const generateBtn = $('generateBtn');
+    const downloadBtn = $('downloadBtn');
+    const openBtn = $('openBtn');
+    const preview = $('preview');
+    const status = $('status');
+    const authStatus = $('authStatus');
+    const loggedOut = $('loggedOut');
+    const loggedIn = $('loggedIn');
+
+    let accessToken = sessionStorage.getItem(TOKEN_KEY) || null;
+    let currentUrl = null;
+
+    function setStatus(msg, isError = false) {
+      status.textContent = msg || '';
+      status.classList.toggle('error', !!isError);
+    }
+
+    function setAuthStatus(msg, isError = false) {
+      authStatus.textContent = msg || '';
+      authStatus.classList.toggle('error', !!isError);
+    }
+
+    function updateAuthUI() {
+      const ok = !!accessToken;
+      loggedOut.style.display = ok ? 'none' : 'block';
+      loggedIn.style.display = ok ? 'block' : 'none';
+      generateBtn.disabled = !ok;
+      if (!ok) {
+        downloadBtn.disabled = true;
+        openBtn.disabled = true;
+      }
+    }
+
+    /** Exact page URL without hash — must match Redirect URI on the App Key */
+    function redirectUri() {
+      return location.origin + location.pathname + location.search;
+    }
+
+    function login() {
+      const params = new URLSearchParams({
+        client_id: APP_KEY,
+        redirect_uri: redirectUri(),
+        scope: 'usage profile',
+      });
+      window.location.href = 'https://enter.pollinations.ai/authorize?' + params.toString();
+    }
+
+    function logout() {
+      accessToken = null;
+      sessionStorage.removeItem(TOKEN_KEY);
+      currentUrl = null;
+      preview.innerHTML = '<div class="placeholder">Sign in, then generate an image</div>';
+      setStatus('');
+      setAuthStatus('');
+      updateAuthUI();
+    }
+
+    /** Handle return from Pollinations (#api_key=sk_... or #error=...) */
+    function handleOAuthCallback() {
+      if (!location.hash || location.hash.length < 2) return;
+
+      const hash = new URLSearchParams(location.hash.slice(1));
+      const key = hash.get('api_key');
+      const err = hash.get('error');
+
+      // Always strip the hash so the key never stays in the address bar
+      history.replaceState(null, '', redirectUri());
+
+      if (err) {
+        setAuthStatus('Sign-in was denied or failed (' + err + ').', true);
+        return;
+      }
+
+      if (key && key.startsWith('sk_')) {
+        accessToken = key;
+        sessionStorage.setItem(TOKEN_KEY, key);
+        setAuthStatus('Signed in successfully.');
+      }
+    }
+
+    function buildImageUrl() {
+      const prompt = promptEl.value.trim();
+      if (!prompt) throw new Error('Enter a prompt');
+      if (!accessToken) throw new Error('Sign in with Pollinations first');
+
+      const [width, height] = sizeEl.value.split('x');
+      const params = new URLSearchParams({
+        model: modelEl.value,
+        width,
+        height,
+        nologo: nologoEl.checked ? 'true' : 'false',
+        key: accessToken,
+      });
+
+      const seed = seedEl.value.trim();
+      if (seed !== '') params.set('seed', seed);
+
+      // cache-bust so regenerating the same prompt still reloads the image
+      params.set('_t', String(Date.now()));
+
+      return 'https://gen.pollinations.ai/image/' + encodeURIComponent(prompt) + '?' + params.toString();
+    }
+
+    async function generate() {
+      generateBtn.disabled = true;
+      downloadBtn.disabled = true;
+      openBtn.disabled = true;
+      setStatus('Generating…');
+      preview.innerHTML = '<div class="placeholder">Generating…</div>';
+
+      try {
+        const url = buildImageUrl();
+
+        const img = new Image();
+        img.alt = promptEl.value.trim();
+        await new Promise((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = () =>
+            reject(new Error('Failed to load image. Check your Pollen balance or try another model.'));
+          img.src = url;
+        });
+
+        preview.innerHTML = '';
+        preview.appendChild(img);
+        currentUrl = url;
+        downloadBtn.disabled = false;
+        openBtn.disabled = false;
+        setStatus('Done');
+      } catch (err) {
+        preview.innerHTML = '<div class="placeholder">Generation failed</div>';
+        setStatus(err.message || 'Error', true);
+      } finally {
+        generateBtn.disabled = !accessToken;
+      }
+    }
+
+    async function download() {
+      if (!currentUrl) return;
+      try {
+        const res = await fetch(currentUrl);
+        if (!res.ok) throw new Error('fetch failed');
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'pollinations-' + Date.now() + '.jpg';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(a.href);
+      } catch {
+        // CORS or network — open image so user can save manually
+        window.open(currentUrl, '_blank', 'noopener');
+      }
+    }
+
+    // ——— wire up ———
+    $('loginBtn').addEventListener('click', login);
+    $('logoutBtn').addEventListener('click', logout);
+    generateBtn.addEventListener('click', generate);
+    downloadBtn.addEventListener('click', download);
+    openBtn.addEventListener('click', () => {
+      if (currentUrl) window.open(currentUrl, '_blank', 'noopener');
+    });
+    promptEl.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && accessToken) generate();
+    });
+
+    handleOAuthCallback();
+    updateAuthUI();
+  </script>
+</body>
+</html>
